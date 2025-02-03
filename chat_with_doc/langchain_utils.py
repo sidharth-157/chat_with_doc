@@ -15,7 +15,11 @@ from pydantic_models import ExtractInformation
 from langchain_ollama import OllamaEmbeddings, OllamaLLM
 import re
 
-retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+#retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
+retriever = (
+                RunnableLambda(lambda data: vectorstore.similarity_search_with_relevance_scores(query=data ,k=20))
+                | RunnableLambda(lambda data: [x[0] for x in data if x[1] > 0.65])
+             )
 
 output_parser = StrOutputParser()
 
