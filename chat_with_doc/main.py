@@ -30,61 +30,18 @@ def chat(query_input: QueryInput):
     if not session_id:
         session_id = str(uuid.uuid4())
 
-    #Logic for stop word
-    nlp = spacy.load("en_core_web_sm")
-    doc = nlp(query_input.question)
-    filtered_words = [token.text for token in doc if not token.is_stop]
-    print("removed stopped words:",filtered_words)
-
-    # All file names
-    filenames = [data["filename"] for data in get_all_documents()]
-    print("all document name", filenames)
 
     chat_history = get_chat_history(session_id)
     logging.info(f"Chat History: {chat_history}")
-    rag_chain = get_rag_chain(query_input.model.value)
+    rag_chain = get_rag_chain(query_input.model.value, query_input.file_name)
     logging.info(f"rag_chain {rag_chain}")
-
-    result = rag_chain.invoke({
-        "input": f"These are list of file names:{filenames} and these are list of words: {filtered_words}. only expect array of file names",
-        "chat_history": chat_history
-    })
-
-    #match file name
-    print("*"*30)
-    print(result["answer"])
-    print("*" * 30)
-
-    query_result = result["answer"]
-    #match_file_name = query_result[query_result.index("["):query_result.index("]")+1]
-
-    match = re.search(r'\[.*?\]', query_result)
-
-    if match:
-        array_str = match.group(0)  # Extracts "[1, 2, 3, "four", "five"]"
-        print("array string:",array_str)
-        array = json.loads(array_str)  # Convert to Python list
-        print(array)  # Output: [1, 2, 3, 'four', 'five']
-        print(type(array))
-    else:
-        print("No JSON array found.")
-
-    print(query_result.index("["),query_result.index("]")+1)
-    #print(match_file_name)
-    #matched_array = json.loads(match_file_name)
-
-    #print("List of file name",matched_array)
-
-
-
-
     result = rag_chain.invoke({
         "input": query_input.question,
         "chat_history": chat_history
     })
     answer = result["answer"]
     print(f"Keys in result: {result.keys()}")
-    sources = result['context']
+
     # Extract metadata from the context field
     sources = []
     if 'context' in result:
@@ -98,11 +55,15 @@ def chat(query_input: QueryInput):
             }
             sources.append(source_info)
     print(sources)
+    if len(sources)==0:
+        answer = f"filenames={query_input.file_name} doesn't contains relevent data for the question please try with " \
+                 f"some different questionns"
     # Log the extracted sources
     logging.info(f"Extracted Sources: {sources}")
     insert_application_logs(session_id, query_input.question, answer, query_input.model.value)
     logging.info(f"Session ID: {session_id}, AI Response: {answer}, Source: {sources}")
     return QueryResponse(answer=answer, session_id=session_id, model=query_input.model, sources= sources)
+
 
 from fastapi import UploadFile, File, HTTPException
 import os

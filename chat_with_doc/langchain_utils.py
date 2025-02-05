@@ -45,21 +45,18 @@ qa_prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}")
 ])
 
-def get_rag_chain(model="gpt-4o-mini"):
+def get_rag_chain(model="gpt-4o-mini",file_name=[]):
     if model == "gpt-4o-mini" or model == "gpt-4o":
         llm = ChatOpenAI(model=model, temperature=0.2)
     else:
         llm = ChatOllama(model=model)
 
+    filter_condition = {"source": {"$in": file_name}}
     retriever = (
             RunnableLambda(
-                lambda data: vectorstore.similarity_search_with_relevance_scores(query=data, k=20, score_threshold=0.5))
+                lambda data: vectorstore.similarity_search_with_relevance_scores(query=data, k=20, score_threshold=0.5, filter = filter_condition))
             | RunnableLambda(lambda data: [x[0] for x in data if x[1] > 0.65])
     )
-
-    print("ids",vectorstore.get(limit= 10,include= ["metadatas"],where={"source": {"$in": ["sow-1.pdf"]}}))
-    #print("ids", vectorstore.get(limit=10, include=["metadatas"], where={"page": 2}))
-
 
     history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)

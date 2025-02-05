@@ -10,11 +10,13 @@ class ModelName(str, Enum):
     Phi = "phi3"
     Mistral = "mistral"
     Gemma_2B = "gemma2:2b"
+    deepseek = "deepseek-r1:8b"
 
 class QueryInput(BaseModel):
     question: str
     session_id: str = Field(default=None)
     model: ModelName = Field(default=ModelName.GPT4_O_MINI)
+    file_name: list
 
 class SourceInfo(BaseModel):
     source: str
