@@ -5,7 +5,9 @@ from pydantic_models import QueryInput, QueryResponse, DocumentInfo, DeleteFileR
 from langchain_utils import get_rag_chain, get_all_information
 from db_utils import insert_application_logs, get_chat_history, get_all_documents, insert_document_record, delete_document_record, check_file_exists
 from chroma_utils import index_document_to_chroma, delete_doc_from_chroma
-import os
+import spacy
+import json
+import re
 import uuid
 import logging
 logging.basicConfig(filename='app.log', level=logging.INFO)
@@ -28,11 +30,54 @@ def chat(query_input: QueryInput):
     if not session_id:
         session_id = str(uuid.uuid4())
 
+    #Logic for stop word
+    nlp = spacy.load("en_core_web_sm")
+    doc = nlp(query_input.question)
+    filtered_words = [token.text for token in doc if not token.is_stop]
+    print("removed stopped words:",filtered_words)
+
+    # All file names
+    filenames = [data["filename"] for data in get_all_documents()]
+    print("all document name", filenames)
 
     chat_history = get_chat_history(session_id)
     logging.info(f"Chat History: {chat_history}")
     rag_chain = get_rag_chain(query_input.model.value)
     logging.info(f"rag_chain {rag_chain}")
+
+    result = rag_chain.invoke({
+        "input": f"These are list of file names:{filenames} and these are list of words: {filtered_words}. only expect array of file names",
+        "chat_history": chat_history
+    })
+
+    #match file name
+    print("*"*30)
+    print(result["answer"])
+    print("*" * 30)
+
+    query_result = result["answer"]
+    #match_file_name = query_result[query_result.index("["):query_result.index("]")+1]
+
+    match = re.search(r'\[.*?\]', query_result)
+
+    if match:
+        array_str = match.group(0)  # Extracts "[1, 2, 3, "four", "five"]"
+        print("array string:",array_str)
+        array = json.loads(array_str)  # Convert to Python list
+        print(array)  # Output: [1, 2, 3, 'four', 'five']
+        print(type(array))
+    else:
+        print("No JSON array found.")
+
+    print(query_result.index("["),query_result.index("]")+1)
+    #print(match_file_name)
+    #matched_array = json.loads(match_file_name)
+
+    #print("List of file name",matched_array)
+
+
+
+
     result = rag_chain.invoke({
         "input": query_input.question,
         "chat_history": chat_history

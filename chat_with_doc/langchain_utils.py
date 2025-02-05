@@ -12,14 +12,14 @@ import os
 from chroma_utils import vectorstore
 from langchain_core.runnables import RunnablePassthrough, RunnableLambda
 from pydantic_models import ExtractInformation
+from db_utils import get_all_documents
 from langchain_ollama import OllamaEmbeddings, OllamaLLM
 import re
 
-#retriever = vectorstore.as_retriever(search_kwargs={"k": 2})
-retriever = (
-                RunnableLambda(lambda data: vectorstore.similarity_search_with_relevance_scores(query=data ,k=20))
-                | RunnableLambda(lambda data: [x[0] for x in data if x[1] > 0.65])
-             )
+#retriever = vectorstore.as_retriever(search_kwargs={"k": 10}) search_type="mmr"
+#retriever = vectorstore.as_retriever(search_type="mmr",search_kwargs={"k": 10, "lambda_mult":0.85})
+#retriever = vectorstore.as_retriever(search_type="mmr",search_kwargs={'score_threshold': 0.8})
+
 
 output_parser = StrOutputParser()
 
@@ -47,9 +47,19 @@ qa_prompt = ChatPromptTemplate.from_messages([
 
 def get_rag_chain(model="gpt-4o-mini"):
     if model == "gpt-4o-mini" or model == "gpt-4o":
-        llm = ChatOpenAI(model=model)
+        llm = ChatOpenAI(model=model, temperature=0.2)
     else:
         llm = ChatOllama(model=model)
+
+    retriever = (
+            RunnableLambda(
+                lambda data: vectorstore.similarity_search_with_relevance_scores(query=data, k=20, score_threshold=0.5))
+            | RunnableLambda(lambda data: [x[0] for x in data if x[1] > 0.65])
+    )
+
+    print("ids",vectorstore.get(limit= 10,include= ["metadatas"],where={"source": {"$in": ["sow-1.pdf"]}}))
+    #print("ids", vectorstore.get(limit=10, include=["metadatas"], where={"page": 2}))
+
 
     history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
     question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
@@ -120,6 +130,8 @@ def get_all_information(file_name:str, model="gpt-4o-mini"):
 
     testStr = matches[0].replace("json", "")
     testStr = testStr.replace("Not Mentioned", '"'+'"')
+
+    print(testStr)
 
     final_result = {"docs_info" : json.loads(testStr)}
     return final_result
